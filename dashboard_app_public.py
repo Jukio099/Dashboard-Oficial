@@ -2,7 +2,7 @@
 # Solo incluye lo visible en las imágenes: logo, KPIs, gráficas principales, filtros, exportación y glosario
 
 import dash
-from dash import dcc, html, Input, Output, State, callback, ctx, dash_table
+from dash import dcc, html, Input, Output, State, callback, ctx, dash_table, no_update
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
@@ -11,6 +11,7 @@ import os
 import numpy as np
 from datetime import datetime, date
 import logging
+import io
 
 # --- Configuración de Logging ---
 logging.basicConfig(
@@ -126,24 +127,25 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             html.Img(
-                src="/assets/subadatos.png",  # Ruta relativa a la carpeta assets
-                style={"height": "70px", "marginRight": "20px"}
+                src="/assets/subadatos.png",
+                style={"height": "60px", "marginRight": "10px", "maxWidth": "100%"}
             ),
-            html.Div("by SUBADATOS", style={"fontWeight": "bold", "fontSize": "1.1em", "color": "#4B2666", "marginTop": "5px"})
-        ], width="auto", className="d-flex flex-column align-items-center justify-content-center"),
+            html.Div("by SUBADATOS", style={"fontWeight": "bold", "fontSize": "1em", "color": "#4B2666", "marginTop": "5px"})
+        ], width=12, xs=12, sm=12, md="auto", className="d-flex flex-column align-items-center justify-content-center mb-2"),
         dbc.Col(
-            html.H1(APP_TITLE, className="text-center text-primary mt-4 mb-2"),
+            html.H1(APP_TITLE, className="text-center text-primary mt-2 mb-2", style={"fontSize": "1.5em"}),
             width=True
         ),
-    ], align="center", className="mb-2"),
+    ], align="center", className="mb-2 flex-wrap"),
     dcc.Store(id='store-selected-categories', data=initial_categories),
+    dcc.Download(id="download-html"),
     dbc.Row(dbc.Col(html.P("Análisis interactivo de precios y volúmenes semanales de subastas ganaderas.",
                            className="text-center text-muted mb-4"), width=12)),
     # --- Fila de Indicadores Clave (KPIs) ---
     dbc.Row(id='kpi-row', children=[
-        dbc.Col(dbc.Card(dbc.CardBody(id='kpi-promedio-reciente', children=[html.H5("Precio Prom. Reciente (€/kg)"), html.P("-")])), md=4, className="mb-2"),
-        dbc.Col(dbc.Card(dbc.CardBody(id='kpi-variacion', children=[html.H5("Variación Semanal"), html.P("-")])), md=4, className="mb-2"),
-        dbc.Col(dbc.Card(dbc.CardBody(id='kpi-cantidad-lotes', children=[html.H5("Lotes Totales Periodo"), html.P("-")])), md=4, className="mb-2"),
+        dbc.Col(dbc.Card(dbc.CardBody(id='kpi-promedio-reciente', children=[html.H5("Precio Prom. Reciente (€/kg)"), html.P("-")])), xs=12, md=4, className="mb-2"),
+        dbc.Col(dbc.Card(dbc.CardBody(id='kpi-variacion', children=[html.H5("Variación Semanal"), html.P("-")])), xs=12, md=4, className="mb-2"),
+        dbc.Col(dbc.Card(dbc.CardBody(id='kpi-cantidad-lotes', children=[html.H5("Lotes Totales Periodo"), html.P("-")])), xs=12, md=4, className="mb-2"),
     ], className="mb-4 justify-content-center"),
     # --- Fila Principal (Controles y Visualizaciones Originales) ---
     dbc.Row([
@@ -178,19 +180,19 @@ app.layout = dbc.Container([
                     dbc.Button("Glosario de Categorías", id="btn-open-glossary", color="info", outline=True, size="sm", className="mt-3 w-100"),
                     html.Hr(),
                     dbc.Label("Exportar Gráfico de Precios Semanales:", className="fw-bold"),
-                    dbc.Button("Descargar HTML Interactivo", id="btn-export-html", color="success", className="w-100"),
+                    dbc.Button("Descargar HTML Interactivo", id="btn-export-html", color="success", className="w-100 mb-2"),
                     html.Div(id='export-feedback', className="text-success small mt-2 text-center")
                 ])
             ], className="shadow-sm")
-        ], md=4, lg=3, className="mb-4"),
+        ], xs=12, md=4, lg=3, className="mb-4"),
         dbc.Col([
             dbc.Card([
                 dbc.CardHeader(html.H5("Evolución de Precios Semanales (€/kg)", className="text-secondary")),
-                dbc.CardBody(dcc.Loading(id="loading-graph-price", children=[dcc.Graph(id='precio-evolucion-graph', style={'height': '600px'})]))
+                dbc.CardBody(dcc.Loading(id="loading-graph-price", children=[dcc.Graph(id='precio-evolucion-graph', style={'height': '40vh', 'width': '100%'})]))
             ], className="mb-4 shadow-sm"),
             dbc.Card([
                  dbc.CardHeader(html.H5("Volumen de Lotes Semanales", className="text-secondary")),
-                 dbc.CardBody(dcc.Loading(id="loading-graph-volume", children=[dcc.Graph(id='volumen-evolucion-graph', style={'height': '30vh'})]))
+                 dbc.CardBody(dcc.Loading(id="loading-graph-volume", children=[dcc.Graph(id='volumen-evolucion-graph', style={'height': '25vh', 'width': '100%'})]))
             ], className="mb-4 shadow-sm"),
             dbc.Card([
                  dbc.CardHeader(html.H5("Tabla de Datos Semanales Filtrados", className="text-secondary")),
@@ -198,7 +200,7 @@ app.layout = dbc.Container([
                     dash_table.DataTable(
                         id='tabla-datos-filtrados',
                         columns=[], data=[], page_size=10,
-                        style_table={'overflowX': 'auto', 'border': '1px solid #ccc', 'borderRadius': '5px'},
+                        style_table={'overflowX': 'auto', 'border': '1px solid #ccc', 'borderRadius': '5px', 'width': '100%'},
                         style_cell={'padding': '10px 12px', 'textAlign': 'left', 'fontFamily': 'Arial, sans-serif',
                                     'fontSize': '0.95rem', 'borderBottom': '1px solid #eee', 'whiteSpace': 'normal', 'height': 'auto'},
                         style_header={'backgroundColor': '#6c757d', 'color': 'white', 'fontWeight': 'bold',
@@ -211,10 +213,11 @@ app.layout = dbc.Container([
                             {'if': {'state': 'active'}, 'backgroundColor': 'rgba(0, 116, 217, 0.1)', 'border': '1px solid rgba(0, 116, 217, 0.2)'}
                         ],
                         sort_action="native", filter_action="native", export_format="csv", export_headers="display",
+                        style_as_list_view=True,
                     )
                  ]))
             ], className="shadow-sm")
-        ], md=8, lg=9)
+        ], xs=12, md=8, lg=9)
     ]),
     html.Hr(className="my-4"),
     # --- Modal Glosario ---
@@ -345,39 +348,57 @@ def update_main_outputs(selected_categories, start_date_str, end_date_str):
         logging.error(f"Error en callback principal (Agregados): {e}", exc_info=True)
         return fig_vacia, fig_vacia, [], [], kpi_defaults[0], kpi_defaults[1], kpi_defaults[2]
 
-@callback(Output('export-feedback', 'children'), Input('btn-export-html', 'n_clicks'), State('store-selected-categories', 'data'), State('fecha-picker', 'start_date'), State('fecha-picker', 'end_date'), prevent_initial_call=True)
+@callback(
+    Output('download-html', 'data'),
+    Output('export-feedback', 'children'),
+    Input('btn-export-html', 'n_clicks'),
+    State('store-selected-categories', 'data'),
+    State('fecha-picker', 'start_date'),
+    State('fecha-picker', 'end_date'),
+    prevent_initial_call=True
+)
 def export_price_graph_html(n_clicks, selected_categories, start_date_str, end_date_str):
-    if n_clicks is None or n_clicks == 0: return ""
-    if df_agg_global.empty: return dbc.Alert("Error: No hay datos agregados cargados para exportar.", color="danger", duration=4000)
-    if not selected_categories: return dbc.Alert("Selecciona al menos una categoría para exportar.", color="warning", duration=4000)
-    if not start_date_str or not end_date_str: return dbc.Alert("Selecciona un rango de fechas válido.", color="warning", duration=4000)
+    if n_clicks is None or n_clicks == 0:
+        return no_update, ""
+    if df_agg_global.empty:
+        return no_update, dbc.Alert("Error: No hay datos agregados cargados para exportar.", color="danger", duration=4000)
+    if not selected_categories:
+        return no_update, dbc.Alert("Selecciona al menos una categoría para exportar.", color="warning", duration=4000)
+    if not start_date_str or not end_date_str:
+        return no_update, dbc.Alert("Selecciona un rango de fechas válido.", color="warning", duration=4000)
     try:
         start_date = pd.to_datetime(start_date_str).normalize(); end_date = pd.to_datetime(end_date_str).normalize()
-        if start_date > end_date: raise ValueError("Fecha inicio > Fecha fin")
-    except Exception as e: return dbc.Alert(f"Fechas inválidas para exportar: {e}", color="danger", duration=4000)
+        if start_date > end_date:
+            raise ValueError("Fecha inicio > Fecha fin")
+    except Exception as e:
+        return no_update, dbc.Alert(f"Fechas inválidas para exportar: {e}", color="danger", duration=4000)
     try:
         mask_date_export = (df_agg_global['FECHA_FERIA'] >= start_date) & (df_agg_global['FECHA_FERIA'] <= end_date)
         df_filtered_date_export = df_agg_global[mask_date_export]
         weekly_avg_export = pd.DataFrame()
-        if not df_filtered_date_export.empty: weekly_avg_export = df_filtered_date_export.groupby(pd.Grouper(key='FECHA_FERIA', freq='W-MON'))['Precio_Promedio_Ponderado'].mean().reset_index()
+        if not df_filtered_date_export.empty:
+            weekly_avg_export = df_filtered_date_export.groupby(pd.Grouper(key='FECHA_FERIA', freq='W-MON'))['Precio_Promedio_Ponderado'].mean().reset_index()
         mask_categories_export = df_filtered_date_export['Sexo'].isin(selected_categories)
         df_final_export = df_filtered_date_export[mask_categories_export].copy()
-        if df_final_export.empty: return dbc.Alert("No hay datos para exportar con los filtros actuales.", color="warning", duration=4000)
-        df_final_export['text_label'] = ''; last_indices_export = df_final_export.loc[df_final_export.groupby('Sexo')['FECHA_FERIA'].idxmax()].index
+        if df_final_export.empty:
+            return no_update, dbc.Alert("No hay datos para exportar con los filtros actuales.", color="warning", duration=4000)
+        df_final_export['text_label'] = ''
+        last_indices_export = df_final_export.loc[df_final_export.groupby('Sexo')['FECHA_FERIA'].idxmax()].index
         df_final_export.loc[last_indices_export, 'text_label'] = df_final_export.loc[last_indices_export, 'Precio_Promedio_Ponderado'].round(0).astype(int).astype(str) + " €"
         fig_export = px.line(df_final_export, x='FECHA_FERIA', y='Precio_Promedio_Ponderado', color='Sexo', text='text_label', title=f'Evolución Semanal Precio ({start_date.strftime("%d/%m/%y")} a {end_date.strftime("%d/%m/%y")})', labels={'FECHA_FERIA': 'Semana', 'Precio_Promedio_Ponderado': 'Precio (€/kg)', 'Sexo': 'Categoría'}, markers=True, template='plotly_white', hover_data=['Cantidad_Lotes'])
         fig_export.update_traces(textposition='top center', textfont=dict(size=10), line=dict(width=2.5), marker=dict(size=6))
-        if not weekly_avg_export.empty: fig_export.add_trace(go.Scatter(x=weekly_avg_export['FECHA_FERIA'], y=weekly_avg_export['Precio_Promedio_Ponderado'], mode='lines', name='Promedio General', line=dict(dash='dot', color='grey', width=1.5), hoverinfo='skip'))
+        if not weekly_avg_export.empty:
+            fig_export.add_trace(go.Scatter(x=weekly_avg_export['FECHA_FERIA'], y=weekly_avg_export['Precio_Promedio_Ponderado'], mode='lines', name='Promedio General', line=dict(dash='dot', color='grey', width=1.5), hoverinfo='skip'))
         fig_export.update_layout(title_x=0.5, legend_title_text='Categorías', xaxis_title="Semana", yaxis_title="Precio (€/kg)", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S"); safe_cats = "_".join(filter(str.isalnum, "_".join(selected_categories)))[:30]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_cats = "_".join(filter(str.isalnum, "_".join(selected_categories)))[:30]
         filename = f"grafico_precios_agregados_{safe_cats}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}_{timestamp}.html"
-        filepath = os.path.join(FOLDER_EXPORTACION, filename)
-        fig_export.write_html(filepath, full_html=True, include_plotlyjs='cdn')
-        logging.info(f"Gráfico agregado exportado exitosamente a: {filepath}")
-        return dbc.Alert(f"¡Éxito! Guardado en: {filepath}", color="success", duration=6000)
+        buffer = io.StringIO()
+        fig_export.write_html(buffer, full_html=True, include_plotlyjs='cdn')
+        buffer.seek(0)
+        return dcc.send_string(buffer.getvalue(), filename=filename), dbc.Alert(f"¡Descarga iniciada!", color="success", duration=6000)
     except Exception as e:
-        logging.error(f"Error crítico durante la exportación a HTML (agregado): {e}", exc_info=True)
-        return dbc.Alert(f"Error al exportar: {e}", color="danger", duration=6000)
+        return no_update, dbc.Alert(f"Error al exportar: {e}", color="danger", duration=6000)
 
 if __name__ == '__main__':
     if df_agg_global.empty:
